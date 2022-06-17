@@ -72,7 +72,11 @@ struct wh_callback_s {
 #define WH_FORMAT_COMMAND 0
 #define WH_FORMAT_JSON 1
 #define WH_FORMAT_KAIROSDB 2
+
+#define WH_FORMAT_FLAGS_JSON_PLAIN 1
+
   int format;
+  int format_flags;
   bool send_metrics;
   bool send_notifications;
 
@@ -495,7 +499,8 @@ static int wh_write_json(const data_set_t *ds, const value_list_t *vl, /* {{{ */
 
   status =
       format_json_value_list(cb->send_buffer, &cb->send_buffer_fill,
-                             &cb->send_buffer_free, ds, vl, cb->store_rates);
+                             &cb->send_buffer_free, ds, vl, cb->store_rates,
+                             cb->format_flags == WH_FORMAT_FLAGS_JSON_PLAIN);
   if (status == -ENOMEM) {
     status = wh_flush_nolock(/* timeout = */ 0, cb);
     if (status != 0) {
@@ -506,7 +511,8 @@ static int wh_write_json(const data_set_t *ds, const value_list_t *vl, /* {{{ */
 
     status =
         format_json_value_list(cb->send_buffer, &cb->send_buffer_fill,
-                               &cb->send_buffer_free, ds, vl, cb->store_rates);
+                               &cb->send_buffer_free, ds, vl, cb->store_rates,
+                               cb->format_flags == WH_FORMAT_FLAGS_JSON_PLAIN);
   }
   if (status != 0) {
     pthread_mutex_unlock(&cb->send_lock);
@@ -655,6 +661,28 @@ static int config_set_format(wh_callback_t *cb, /* {{{ */
   return 0;
 } /* }}} int config_set_format */
 
+static int config_set_format_flags(wh_callback_t *cb, /* {{{ */
+                             oconfig_item_t *ci) {
+  char *string;
+
+  if ((ci->values_num != 1) || (ci->values[0].type != OCONFIG_TYPE_STRING)) {
+    WARNING("write_http plugin: The `%s' config option "
+            "needs exactly one string argument.",
+            ci->key);
+    return -1;
+  }
+
+  string = ci->values[0].value.string;
+  if (strcasecmp("PLAIN", string) == 0)
+    cb->format = WH_FORMAT_JSON;
+  else {
+    ERROR("write_http plugin: Invalid format flags string: %s", string);
+    return -1;
+  }
+
+  return 0;
+} /* }}} int config_set_format */
+
 static int wh_config_append_string(const char *name,
                                    struct curl_slist **dest, /* {{{ */
                                    oconfig_item_t *ci) {
@@ -770,6 +798,8 @@ static int wh_config_node(oconfig_item_t *ci) /* {{{ */
       sfree(value);
     } else if (strcasecmp("Format", child->key) == 0)
       status = config_set_format(cb, child);
+    else if (strcasecmp("FormatFlags", child->key) == 0)
+      status = config_set_format_flags(cb, child);
     else if (strcasecmp("Metrics", child->key) == 0)
       cf_util_get_boolean(child, &cb->send_metrics);
     else if (strcasecmp("Statistics", child->key) == 0) {

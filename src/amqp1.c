@@ -54,6 +54,10 @@
 #define AMQP1_FORMAT_COMMAND 1
 #define AMQP1_FORMAT_GRAPHITE 2
 
+#define AMQP1_FORMAT_FLAG_JSON_PLAIN 1
+
+
+, conf->format_flags == CAMQP_FORMAT_FLAG_JSON_PLAIN
 typedef struct amqp1_config_transport_s {
   DEQ_LINKS(struct amqp1_config_transport_s);
   char *name;
@@ -480,7 +484,7 @@ static int amqp1_write(const data_set_t *ds, const value_list_t *vl, /* {{{ */
   case AMQP1_FORMAT_JSON:
     format_json_initialize((char *)cdm->mbuf.start, &bfill, &bfree);
     format_json_value_list((char *)cdm->mbuf.start, &bfill, &bfree, ds, vl,
-                           instance->store_rates);
+                           instance->store_rates, instance->format_flags == AMQP1_FORMAT_FLAG_JSON_PLAIN);
     status = format_json_finalize((char *)cdm->mbuf.start, &bfill, &bfree);
     if (status != 0) {
       ERROR("amqp1 plugin: format_json_finalize failed with status %i.",
@@ -597,6 +601,20 @@ static int amqp1_config_instance(oconfig_item_t *ci) /* {{{ */
         WARNING("amqp1 plugin: Invalid format string: %s", key);
       }
       sfree(key);
+      else if (strcasecmp("FormatFlags", child->key) == 0) {
+        char *key = NULL;
+        status = cf_util_get_string(child, &key);
+        if (status != 0) {
+          amqp1_config_instance_free(instance);
+          return status;
+        }
+        assert(key != NULL);
+        if (strcasecmp(key, "PLAIN") == 0) {
+          instance->format = AMQP1_FORMAT_FLAG_JSON_PLAIN;
+        } else {
+          WARNING("amqp1 plugin: Invalid format flags string: %s", key);
+        }
+        sfree(key);
     } else if (strcasecmp("StoreRates", child->key) == 0)
       status = cf_util_get_boolean(child, &instance->store_rates);
     else if (strcasecmp("GraphiteSeparateInstances", child->key) == 0)

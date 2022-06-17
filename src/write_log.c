@@ -40,8 +40,11 @@
 #define WL_FORMAT_GRAPHITE 1
 #define WL_FORMAT_JSON 2
 
+#define WL_FORMAT_FLAGS_JSON_PLAIN 1
+
 /* Plugin:WriteLog has to also operate without a config, so use a global. */
 int wl_format = WL_FORMAT_GRAPHITE;
+int wl_format_flags = 0;
 
 static int wl_write_graphite(const data_set_t *ds, const value_list_t *vl) {
   char buffer[WL_BUF_SIZE] = {0};
@@ -73,7 +76,8 @@ static int wl_write_json(const data_set_t *ds, const value_list_t *vl) {
 
   format_json_initialize(buffer, &bfill, &bfree);
   format_json_value_list(buffer, &bfill, &bfree, ds, vl,
-                         /* store rates = */ 0);
+                         /* store rates = */ 0,
+                         wl_format_flags == WL_FORMAT_FLAGS_JSON_PLAIN);
   format_json_finalize(buffer, &bfill, &bfree);
 
   INFO("write_log values:\n%s", buffer);
@@ -121,6 +125,24 @@ static int wl_config(oconfig_item_t *ci) /* {{{ */
               child->key);
         return -EINVAL;
       }
+    } else if (strcasecmp("FormatFlags", child->key) == 0) {
+        char str[16];
+
+        if (cf_util_get_string_buffer(child, str, sizeof(str)) != 0)
+          continue;
+
+        if (format_seen) {
+          WARNING("write_log plugin: Redefining option `%s'.", child->key);
+        }
+        format_seen = true;
+
+        if (strcasecmp("PLAIN", str) == 0)
+          wl_format_flags = WL_FORMAT_FLAGS_JSON_PLAIN;
+        else {
+          ERROR("write_log plugin: Unknown format flag `%s' for option `%s'.", str,
+                child->key);
+          return -EINVAL;
+        }
     } else {
       ERROR("write_log plugin: Invalid configuration option: `%s'.",
             child->key);

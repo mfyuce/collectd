@@ -62,6 +62,8 @@ int amqp_socket_close(amqp_socket_t *);
 #define CAMQP_FORMAT_JSON 2
 #define CAMQP_FORMAT_GRAPHITE 3
 
+#define CAMQP_FORMAT_FLAG_JSON_PLAIN 1
+
 #define CAMQP_CHANNEL 1
 
 /*
@@ -95,6 +97,7 @@ struct camqp_config_s {
   uint8_t delivery_mode;
   bool store_rates;
   int format;
+  int format_flags;
   /* publish & graphite format only */
   char *prefix;
   char *postfix;
@@ -825,7 +828,14 @@ static int camqp_write(const data_set_t *ds, const value_list_t *vl, /* {{{ */
     size_t bfill = 0;
 
     format_json_initialize(buffer, &bfill, &bfree);
-    format_json_value_list(buffer, &bfill, &bfree, ds, vl, conf->store_rates);
+    format_json_value_list(buffer, &bfill, &bfree, ds, vl, conf->store_rates, conf->format_flags == CAMQP_FORMAT_FLAG_JSON_PLAIN);
+    format_json_finalize(buffer, &bfill, &bfree);
+  } else if (conf->format == CAMQP_FORMAT_FLAG_JSON_PLAIN) {
+    size_t bfree = sizeof(buffer);
+    size_t bfill = 0;
+
+    format_json_initialize(buffer, &bfill, &bfree);
+    format_json_value_list(buffer, &bfill, &bfree, ds, vl, conf->store_rates,true);
     format_json_finalize(buffer, &bfill, &bfree);
   } else if (conf->format == CAMQP_FORMAT_GRAPHITE) {
     status =
@@ -876,6 +886,31 @@ static int camqp_config_set_format(oconfig_item_t *ci, /* {{{ */
   return 0;
 } /* }}} int config_set_string */
 
+/*
+ * Config handling
+ */
+static int camqp_config_set_format_flags(oconfig_item_t *ci, /* {{{ */
+                                   camqp_config_t *conf) {
+  char *string;
+  int status;
+
+  string = NULL;
+  status = cf_util_get_string(ci, &string);
+  if (status != 0)
+    return status;
+
+  assert(string != NULL);
+
+  if (strcasecmp("PLAIN", string) == 0)
+    conf->format_flags = CAMQP_FORMAT_FLAG_JSON_PLAIN;
+  else {
+    WARNING("amqp plugin: Invalid format flags string: %s", string);
+  }
+
+  free(string);
+
+  return 0;
+} /* }}} int config_set_string */
 static int camqp_config_connection(oconfig_item_t *ci, /* {{{ */
                                    bool publish) {
   camqp_config_t *conf;
@@ -998,6 +1033,8 @@ static int camqp_config_connection(oconfig_item_t *ci, /* {{{ */
                              GRAPHITE_STORE_RATES);
     } else if ((strcasecmp("Format", child->key) == 0) && publish)
       status = camqp_config_set_format(child, conf);
+    else if ((strcasecmp("FormatFlags", child->key) == 0) && publish)
+      status = camqp_config_set_format_flags(child, conf);
     else if ((strcasecmp("GraphiteSeparateInstances", child->key) == 0) &&
              publish)
       status = cf_util_get_flag(child, &conf->graphite_flags,

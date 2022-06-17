@@ -41,7 +41,11 @@ struct kafka_topic_context {
 #define KAFKA_FORMAT_JSON 0
 #define KAFKA_FORMAT_COMMAND 1
 #define KAFKA_FORMAT_GRAPHITE 2
+
+#define KAFKA_FORMAT_FLAGS_JSON_PLAIN 1
+
   uint8_t format;
+  uint8_t format_flags;
   unsigned int graphite_flags;
   bool store_rates;
   rd_kafka_topic_conf_t *conf;
@@ -204,7 +208,8 @@ static int kafka_write(const data_set_t *ds, /* {{{ */
     break;
   case KAFKA_FORMAT_JSON:
     format_json_initialize(buffer, &bfill, &bfree);
-    format_json_value_list(buffer, &bfill, &bfree, ds, vl, ctx->store_rates);
+    format_json_value_list(buffer, &bfill, &bfree, ds, vl, ctx->store_rates,
+                           ctx->format_flags == KAFKA_FORMAT_FLAGS_JSON_PLAIN);
     format_json_finalize(buffer, &bfill, &bfree);
     blen = strlen(buffer);
     break;
@@ -316,7 +321,6 @@ static void kafka_config_topic(rd_kafka_conf_t *conf,
      */
     child = &ci->children[i];
     status = 0;
-
     if (strcasecmp("Property", child->key) == 0) {
       if (child->values_num != 2) {
         WARNING("kafka properties need both a key and a value.");
@@ -362,6 +366,19 @@ static void kafka_config_topic(rd_kafka_conf_t *conf,
 
       } else {
         WARNING("write_kafka plugin: Invalid format string: %s", key);
+      }
+
+      sfree(key);
+    } else if (strcasecmp("FormatFlags", child->key) == 0) {
+      status = cf_util_get_string(child, &key);
+      if (status != 0)
+        goto errout;
+
+      assert(key != NULL);
+      if (strcasecmp(key, "PLAIN") == 0) {
+        tctx->format_flags = KAFKA_FORMAT_FLAGS_JSON_PLAIN;
+      } else {
+        WARNING("write_kafka plugin: Invalid format flags string: %s", key);
       }
 
       sfree(key);
