@@ -798,7 +798,7 @@ static int wh_config_node(oconfig_item_t *ci) /* {{{ */
       sfree(value);
     } else if (strcasecmp("Format", child->key) == 0)
       status = config_set_format(cb, child);
-    else if (strcasecmp("FormatFlags", child->key) == 0)
+    else if (strcasecmp("FormatFlgas", child->key) == 0)
       status = config_set_format_flags(cb, child);
     else if (strcasecmp("Metrics", child->key) == 0)
       cf_util_get_boolean(child, &cb->send_metrics);

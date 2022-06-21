@@ -57,7 +57,6 @@
 #define AMQP1_FORMAT_FLAG_JSON_PLAIN 1
 
 
-, conf->format_flags == CAMQP_FORMAT_FLAG_JSON_PLAIN
 typedef struct amqp1_config_transport_s {
   DEQ_LINKS(struct amqp1_config_transport_s);
   char *name;
