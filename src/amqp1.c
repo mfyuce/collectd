@@ -74,6 +74,7 @@ typedef struct amqp1_config_instance_s {
   char *name;
   bool notify;
   uint8_t format;
+  uint8_t format_flags;
   unsigned int graphite_flags;
   bool store_rates;
   char *prefix;
@@ -600,7 +601,7 @@ static int amqp1_config_instance(oconfig_item_t *ci) /* {{{ */
         WARNING("amqp1 plugin: Invalid format string: %s", key);
       }
       sfree(key);
-      else if (strcasecmp("FormatFlags", child->key) == 0) {
+    }else if (strcasecmp("FormatFlags", child->key) == 0) {
         char *key = NULL;
         status = cf_util_get_string(child, &key);
         if (status != 0) {
